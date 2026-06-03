@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { dbHelper } from '../database/dbHelper.js';
 import { queryGroq } from '../services/groq.js';
-import { getAvailableSlots, createEvent } from '../services/calendar.js';
+import { getAvailableSlots, createEvent, deleteEvent } from '../services/calendar.js';
 import { sendWhatsAppMessage } from '../services/evolution.js';
 
 /**
@@ -95,7 +95,7 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
 
       if (currentService && currentDate && currentTime) {
         // Se temos todas as informações, tenta agendar no Google Calendar
-        const scheduled = await createEvent(
+        const eventId = await createEvent(
           tenant,
           session.user_name || userName,
           chatJid,
@@ -104,7 +104,17 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
           currentTime
         );
 
-        if (scheduled) {
+        if (eventId) {
+          // Salva o agendamento no banco de dados local
+          await dbHelper.createAppointment(
+            chatJid,
+            tenantId,
+            currentService,
+            currentDate,
+            currentTime,
+            eventId
+          );
+
           finalReply = `✨ *Agendamento Confirmado!*\n\n📅 *Data:* ${currentDate.split('-').reverse().join('/')}\n⏰ *Horário:* ${currentTime}\n💈 *Serviço:* ${currentService}\n\nTe aguardamos!`;
           await dbHelper.clearSession(chatJid);
         } else {
@@ -130,7 +140,21 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
         }
       }
     } else if (aiResult.intent === 'CANCEL') {
-      // Se solicitou cancelamento, limpamos os dados temporários de agendamento em andamento
+      // Busca o último agendamento ativo do cliente
+      const lastAppt = await dbHelper.getLastActiveAppointment(chatJid);
+      if (lastAppt) {
+        // Exclui do calendário (Google Calendar)
+        const deleted = await deleteEvent(tenant, lastAppt.google_event_id);
+        if (deleted) {
+          // Marca no banco de dados local como cancelado
+          await dbHelper.cancelAppointmentDb(lastAppt.id);
+          finalReply = `🚫 *Agendamento Cancelado!*\n\nSeu compromisso de *${lastAppt.service}* em *${lastAppt.date.split('-').reverse().join('/')}* às *${lastAppt.time}* foi cancelado com sucesso.`;
+        } else {
+          finalReply = `Não consegui processar o cancelamento do seu agendamento automaticamente. Por favor, tente novamente ou entre em contato direto.`;
+        }
+      } else {
+        finalReply = `Não encontrei nenhum agendamento ativo associado a você para ser cancelado.`;
+      }
       await dbHelper.clearSession(chatJid);
     }
 

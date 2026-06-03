@@ -169,4 +169,60 @@ export const dbHelper = {
       );
     });
   },
+
+  // --- Appointments (Agendamentos efetuados) ---
+  createAppointment(
+    chatId: string,
+    tenantId: string,
+    service: string,
+    date: string,
+    time: string,
+    googleEventId: string | null
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const db = getDb();
+      db.run(
+        `INSERT INTO appointments (chat_id, tenant_id, service, date, time, google_event_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [chatId, tenantId, service, date, time, googleEventId],
+        (err) => {
+          db.close();
+          if (err) return reject(err);
+          resolve();
+        }
+      );
+    });
+  },
+
+  getLastActiveAppointment(chatId: string): Promise<any | null> {
+    return new Promise((resolve, reject) => {
+      const db = getDb();
+      db.get(
+        `SELECT * FROM appointments 
+         WHERE chat_id = ? AND status = 'CONFIRMED' 
+         ORDER BY id DESC LIMIT 1`,
+        [chatId],
+        (err, row) => {
+          db.close();
+          if (err) return reject(err);
+          resolve(row || null);
+        }
+      );
+    });
+  },
+
+  cancelAppointmentDb(id: number): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const db = getDb();
+      db.run(
+        `UPDATE appointments SET status = 'CANCELLED' WHERE id = ?`,
+        [id],
+        (err) => {
+          db.close();
+          if (err) return reject(err);
+          resolve();
+        }
+      );
+    });
+  },
 };

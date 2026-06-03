@@ -54,6 +54,23 @@ export function initDb() {
         FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
       );
     `);
+
+    // Tabela appointments (agendamentos efetuados e IDs do Google Calendar)
+    db.run(`
+      CREATE TABLE IF NOT EXISTS appointments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        service TEXT NOT NULL,
+        date TEXT NOT NULL,
+        time TEXT NOT NULL,
+        google_event_id TEXT,
+        status TEXT DEFAULT 'CONFIRMED', -- 'CONFIRMED' ou 'CANCELLED'
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(chat_id) REFERENCES sessions(chat_id) ON DELETE CASCADE,
+        FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+      );
+    `);
   });
   console.log('Banco de dados inicializado com sucesso.');
   db.close();

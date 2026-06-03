@@ -87,10 +87,11 @@ export async function createEvent(
   service: string,
   dateStr: string,
   timeStr: string
-): Promise<boolean> {
+): Promise<string | null> {
   if (!tenant.google_credentials || !tenant.google_calendar_id || tenant.google_credentials.includes('MOCK')) {
-    console.log(`[Calendar Mock] Agendando evento para ${clientName} (${clientPhone}) - ${service} em ${dateStr} às ${timeStr}`);
-    return true;
+    const mockId = `mock-event-${Date.now()}`;
+    console.log(`[Calendar Mock] Agendando evento para ${clientName} (${clientPhone}) - ${service} em ${dateStr} às ${timeStr}. Event ID: ${mockId}`);
+    return mockId;
   }
 
   const calendar = getCalendarClient(tenant.google_credentials);
@@ -101,7 +102,7 @@ export async function createEvent(
   const endDateTime = new Date(startDateTime.getTime() + 30 * 60 * 1000);
 
   try {
-    await calendar.events.insert({
+    const response = await calendar.events.insert({
       calendarId,
       requestBody: {
         summary: `Corte: ${clientName} - ${service}`,
@@ -116,9 +117,33 @@ export async function createEvent(
         },
       },
     });
-    return true;
+    return response.data.id || null;
   } catch (error) {
     console.error(`Erro ao criar evento no Calendar para o tenant ${tenant.id}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Exclui um agendamento do Google Calendar do tenant.
+ */
+export async function deleteEvent(tenant: Tenant, googleEventId: string): Promise<boolean> {
+  if (!tenant.google_credentials || !tenant.google_calendar_id || tenant.google_credentials.includes('MOCK')) {
+    console.log(`[Calendar Mock] Cancelando/Removendo evento ID ${googleEventId} no tenant ${tenant.id}`);
+    return true;
+  }
+
+  const calendar = getCalendarClient(tenant.google_credentials);
+  const calendarId = tenant.google_calendar_id;
+
+  try {
+    await calendar.events.delete({
+      calendarId,
+      eventId: googleEventId,
+    });
+    return true;
+  } catch (error) {
+    console.error(`Erro ao deletar evento ${googleEventId} no Calendar para o tenant ${tenant.id}:`, error);
     return false;
   }
 }

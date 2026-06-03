@@ -1,31 +1,32 @@
 # Roadmap de Automação de Barbearias Multi-Tenant com IA
 
-Este documento registra o estado atual do projeto, a arquitetura de software implementada e os próximos passos para continuar o desenvolvimento. O objetivo é permitir que você continue de onde parou ao abrir este projeto em sua máquina local em casa.
+Este documento registra o estado atual do projeto, a arquitetura de software implementada e as instruções para rodar e validar o protótipo localmente.
 
 ---
 
 ## 📌 Estado Atual do Projeto
 
-O projeto foi planejado e estruturado para rodar de forma extremamente leve (consumindo < 100MB de RAM de backend), sendo perfeito para hospedar em uma VPS gratuita (como a Oracle Cloud Free Tier de 1GB de RAM), integrada com a **Groq API** e **Evolution API**.
+O protótipo foi **completamente desenvolvido e verificado**, integrando os fluxos de saudação, verificação de horários, agendamento no Google Calendar e cancelamento real.
 
-### 🛠️ O que já foi implementado:
-1. **Estrutura de Dependências & TypeScript (`package.json`, `tsconfig.json`)**: Configurado com as dependências essenciais (`express`, `sqlite3`, `groq-sdk`, `googleapis`, `axios`) e configurado para compilação direta via `tsx` (TypeScript Execute).
-2. **Banco de Dados SQLite (`src/database/init.ts` e `dbHelper.ts`)**: 
-   - Banco de dados inicializado com suporte a chaves estrangeiras (`PRAGMA foreign_keys = ON;`).
-   - Tabelas criadas: `tenants` (dados e chaves de API/calendário de cada barbearia), `sessions` (estados da conversa ativa) e `messages` (histórico de chat).
-   - CRUD encapsulado em Promises pronto para uso no backend (`dbHelper`).
+### 🛠️ O que foi implementado:
+1. **Estrutura de Dependências & TypeScript (`package.json`, `tsconfig.json`)**: Configurado e otimizado com TypeScript.
+2. **Banco de Dados SQLite (`src/database/init.ts` e `dbHelper.ts`)**:
+   - Chaves estrangeiras habilitadas.
+   - Tabelas criadas: `tenants` (barbearias), `sessions` (sessões de conversa), `messages` (histórico) e a nova tabela `appointments` (guarda os agendamentos efetuados e os IDs reais do Google Calendar correspondentes).
+   - Métodos CRUD completos encapsulados em Promises (`dbHelper.ts`).
 3. **Integração Groq API (`src/services/groq.ts`)**:
-   - Serviço construído para enviar o histórico da conversa e obter respostas estruturadas em JSON.
-   - Possui detecção automática de intenções (`BOOKING`, `INQUIRY`, `CANCEL`, `RESCHEDULE`, `OTHER`) e extração automática de dados (serviço, data, hora).
-   - Resolve termos relativos como "amanhã" e "sábado" baseando-se no fuso horário brasileiro.
+   - IA estruturada para responder e detectar intenções (`BOOKING`, `CANCEL`, `INQUIRY`, etc.) em formato JSON.
 4. **Integração Google Calendar (`src/services/calendar.ts`)**:
-   - Conexão via JWT (Service Account) isolada por tenant (cada barbearia tem sua própria credencial salva em formato JSON no banco).
-   - Algoritmo de verificação de horários disponíveis em slots de 30 minutos das 09h às 18h.
-   - Função para criação de agendamento automático.
-5. **Integração WhatsApp Evolution API (`src/services/evolution.ts`)**:
-   - Serviço de emissão de mensagens de volta para a API do WhatsApp associada a cada barbearia (tenant).
-
-> 💡 **Nota sobre Fallbacks:** Todos os serviços de API externa (Groq, Calendar, Evolution) possuem funções de fallback/mock integradas. Se as credenciais ou chaves de API estiverem ausentes no arquivo `.env` ou banco de dados, os serviços logarão as ações no console e retornarão dados simulados coerentes, permitindo testar toda a lógica do bot localmente sem nenhuma configuração complexa inicial.
+   - Funções para listar horários livres (`getAvailableSlots`), agendar (`createEvent` retornando o ID do evento) e cancelar agendamentos (`deleteEvent` via ID do evento).
+   - Suporte a múltiplos inquilinos e modo de simulação (Mock) integrado para testes rápidos.
+5. **Express Webhook Server (`src/index.ts` e `src/controllers/webhook.ts`)**:
+   - Ponto de entrada Express escutando na porta 3000.
+   - Controlador de webhook estruturado para receber payloads do WhatsApp, gerenciar a conversa, registrar os agendamentos no banco SQLite local e disparar respostas automáticas.
+6. **Scripts de Teste e Simulação**:
+   - `scripts/create-tenant.ts`: Registra uma barbearia com serviços e regras de prompt customizadas.
+   - `scripts/simulate-chat.ts`: Simula uma conversa de 3 turnos (iniciar agendamento -> escolher horário -> cancelar) enviando webhooks sequenciais.
+7. **Configuração (`.env.example` e `.gitignore`)**:
+   - Template para preenchimento de variáveis de ambiente criado.
 
 ---
 
@@ -35,71 +36,59 @@ automação-barbearia/
 ├── src/
 │   ├── config/          # Configurações globais e variáveis de ambiente
 │   ├── database/        # Inicialização do SQLite e helpers do banco
-│   │   ├── init.ts      # Inicializador de tabelas
-│   │   └── dbHelper.ts  # Operações de CRUD do banco de dados
+│   │   ├── init.ts      # Inicializador de tabelas (agora inclui a tabela appointments)
+│   │   └── dbHelper.ts  # Operações de CRUD completas (inclui agendamentos e cancelamento)
 │   ├── services/        # Clientes de APIs externas
-│   │   ├── calendar.ts  # Google Calendar (Listar/Agendar)
+│   │   ├── calendar.ts  # Google Calendar (Listar/Agendar/Deletar)
 │   │   ├── evolution.ts # WhatsApp API (Enviar mensagens)
 │   │   └── groq.ts      # IA Groq (Extração e Resposta)
 │   ├── controllers/     # Controladores HTTP (Express)
-│   │   └── webhook.ts   # [A FAZER] Webhook da Evolution API e orquestração do bot
-│   └── index.ts         # [A FAZER] Ponto de entrada do servidor Express
+│   │   └── webhook.ts   # Webhook da Evolution API e orquestração do chatbot
+│   └── index.ts         # Ponto de entrada do servidor Express
 ├── scripts/
-│   └── create-tenant.ts # [A FAZER] Script auxiliar para cadastrar barbearias no banco
-├── database.db          # Arquivo local do SQLite (gerado automaticamente)
+│   ├── create-tenant.ts # Script auxiliar para cadastrar barbearias no banco
+│   ├── test-webhook.ts  # Teste rápido de 1 webhook
+│   └── simulate-chat.ts # Simulação interativa de fluxo completo (multi-turn)
+├── database.db          # Arquivo do SQLite (gerado automaticamente)
 ├── tsconfig.json        # Configuração do TypeScript
 ├── package.json         # Dependências do NodeJS
+├── .env.example         # Modelo de configuração das variáveis
 └── ROADMAP.md           # Este arquivo de controle
 ```
 
 ---
 
-## 🚀 Próximos Passos (Para Fazer em Casa)
+## 🚀 Como testar e validar o protótipo na sua máquina
 
-Para finalizar a primeira versão funcional e colocar o sistema para rodar em desenvolvimento:
+Para testar o fluxo de agendamento e cancelamento simulado:
 
-### 1. Criar o Controlador de Webhook (`src/controllers/webhook.ts`)
-Este controlador receberá a mensagem vinda do webhook da Evolution API e executará a lógica principal:
-1. Identificar o ID da instância do webhook (que corresponde ao `tenant_id`).
-2. Buscar os dados do tenant no banco (para obter o `system_prompt` e dados do calendário).
-3. Obter ou criar a sessão ativa do cliente (`chat_id`).
-4. Recuperar o histórico de mensagens e anexar a nova mensagem recebida.
-5. Enviar os dados para a `Groq API` que responderá com a intenção e os dados extraídos.
-6. **Lógica de decisão baseada na intenção:**
-   - **Se intenção for `BOOKING`:**
-     - Se o usuário não definiu serviço/data/hora: enviar resposta da Groq solicitando os dados faltantes.
-     - Se definiu a data mas não a hora: buscar os horários disponíveis no `Calendar` e oferecer na mensagem.
-     - Se definiu serviço, data e hora: criar o evento no `Calendar` e confirmar o agendamento.
-   - **Se intenção for `INQUIRY` ou `OTHER`:**
-     - Enviar a resposta textual gerada pela Groq diretamente para o WhatsApp do cliente.
-7. Atualizar a sessão e salvar a mensagem do usuário e da IA no banco de dados para a memória da conversa.
-
-### 2. Criar o Ponto de Entrada Express (`src/index.ts`)
-Criar o servidor Express básico, habilitar JSON, e definir a rota:
-*   `POST /webhook` -> aponta para o controlador acima.
-*   Porta padrão: `3000`.
-
-### 3. Criar Script de Registro de Tenants (`scripts/create-tenant.ts`)
-Um script CLI rápido para inserir barbearias de teste na tabela `tenants`. Exemplo:
-```typescript
-import { dbHelper } from '../src/database/dbHelper.js';
-dbHelper.upsertTenant({
-  id: "barbearia_central",
-  name: "Barbearia Central",
-  system_prompt: "Você é o assistente virtual da Barbearia Central..."
-});
-```
-
-### 4. Configurar `.env` e Iniciar o Servidor
-1. Crie o arquivo `.env` na raiz com:
-   ```env
-   PORT=3000
-   GROQ_API_KEY=sua_chave_groq_aqui
-   EVOLUTION_API_URL=http://localhost:8080
-   EVOLUTION_API_APIKEY=sua_chave_evolution_aqui
+1. **Instale as dependências:**
+   ```bash
+   npm install
    ```
-2. Inicie o servidor em modo desenvolvimento:
+2. **Inicialize o Banco de Dados:**
+   ```bash
+   npm run init-db
+   ```
+3. **Cadastre a barbearia de teste:**
+   ```bash
+   npx tsx scripts/create-tenant.ts
+   ```
+4. **Inicie o servidor local:**
    ```bash
    npm run dev
    ```
-3. Teste o fluxo enviando requisições POST para `http://localhost:3000/webhook` com payloads de simulação da Evolution API (o Antigravity em casa poderá ajudar a construir esses payloads de teste).
+5. **(Em outro terminal) Rode a simulação de conversa completa:**
+   ```bash
+   npx tsx scripts/simulate-chat.ts
+   ```
+   *Você verá a conversa ocorrendo no console de simulação, enquanto o terminal do servidor mostrará a IA processando as intenções, fazendo a busca de horários, salvando a reserva no banco de dados e excluindo-a no final devido ao cancelamento.*
+
+---
+
+## 🏁 Próximos Passos (Transição para Produção)
+
+Com o protótipo validado, os próximos passos ao implantar o sistema online são:
+1. **Configurar a Nuvem:** Obter chaves reais do Google Calendar (Service Account) e da Groq.
+2. **Dockerizar a Aplicação:** Criar um arquivo `Dockerfile` e um `docker-compose.yml` para rodar o backend Node.js junto com o contêiner da Evolution API na VPS.
+3. **Liberar Portas:** Configurar Nginx / SSL para que a Evolution API possa expor o webhook da VPS de forma segura para o WhatsApp.
