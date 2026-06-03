@@ -7,12 +7,11 @@ import { Tenant } from '../database/dbHelper.js';
 function getCalendarClient(googleCredentialsStr: string) {
   try {
     const creds = JSON.parse(googleCredentialsStr);
-    const auth = new google.auth.JWT(
-      creds.client_email,
-      undefined,
-      creds.private_key.replace(/\\n/g, '\n'), // Corrige quebras de linha na chave privada
-      ['https://www.googleapis.com/auth/calendar']
-    );
+    const auth = new google.auth.JWT({
+      email: creds.client_email,
+      key: creds.private_key.replace(/\\n/g, '\n'),
+      scopes: ['https://www.googleapis.com/auth/calendar']
+    });
     return google.calendar({ version: 'v3', auth });
   } catch (error) {
     console.error('Erro ao inicializar cliente Google Calendar:', error);

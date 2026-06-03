@@ -1,11 +1,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const dbPath = path.resolve(__dirname, '../../database.db');
+const dbPath = path.resolve('database.db');
 
 export function getDb(): sqlite3.Database {
   return new sqlite3.Database(dbPath);
